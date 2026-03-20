@@ -264,6 +264,7 @@ function roundFromNote(n){
 }
 let games=[];
 let teamData={};
+let teamLogos={};
 let hasLive=false;
 let curRound="Round of 64";
 let openP=new Set(PL);
@@ -273,6 +274,11 @@ function initTeamData(){
 }
 function processGames(){
   initTeamData();
+  teamLogos={};
+  games.forEach(g=>{
+    if(g.t0.info?.team&&g.t0.logo)teamLogos[g.t0.info.team]=g.t0.logo;
+    if(g.t1.info?.team&&g.t1.logo)teamLogos[g.t1.info.team]=g.t1.logo;
+  });
   let maxRd=1;hasLive=false;
   games.forEach(g=>{
     if(g.status==='live'){
@@ -447,7 +453,8 @@ function renderScores(){
       } else {
         cls='cmp-team pend';style='';
       }
-      h+=`<div class="${cls}" style="${style}" title="${t}">${badge}${t}${liveHtml}</div>`;
+      const logo=teamLogos[t]?`<img src="${teamLogos[t]}" style="width:10px;height:10px;object-fit:contain;border-radius:2px;margin-right:3px;vertical-align:middle;opacity:${d.alive===false?0.3:0.85}" alt="">`:'';
+      h+=`<div class="${cls}" style="${style}" title="${t}">${badge}${logo}${t}${liveHtml}</div>`;
     });
     h+='</div>';
   });
@@ -461,6 +468,25 @@ function renderGames(){
   const byRound={};
   games.forEach(g=>{if(!byRound[g.rd])byRound[g.rd]=[];byRound[g.rd].push(g)});
   let h='';
+
+  // ── Live games pinned to top ──
+  const liveAll=games.filter(g=>g.status==='live');
+  if(liveAll.length){
+    h+=`<div class="sec"><div class="sec-label" style="color:var(--live)">● Live Now</div><div class="gc">`;
+    liveAll.forEach(g=>{
+      const ownerColor0=g.t0.owner?PC[g.t0.owner]:null;
+      const ownerColor1=g.t1.owner?PC[g.t1.owner]:null;
+      h+=`<div class="gm">
+        <div class="gm-teams">
+          <div class="gm-row">${g.t0.logo?`<img class="gm-logo" src="${g.t0.logo}" alt="">`:''}<div class="gm-name" style="font-weight:800">${g.t0.name}</div>${g.t0.owner?`<span class="gm-owner" style="background:${ownerColor0}18;color:${ownerColor0}">${g.t0.owner}</span>`:''}<div class="gm-sc" style="color:#fff;font-weight:800">${g.t0.score}</div></div>
+          <div class="gm-row">${g.t1.logo?`<img class="gm-logo" src="${g.t1.logo}" alt="">`:''}<div class="gm-name" style="font-weight:800">${g.t1.name}</div>${g.t1.owner?`<span class="gm-owner" style="background:${ownerColor1}18;color:${ownerColor1}">${g.t1.owner}</span>`:''}<div class="gm-sc" style="color:#fff;font-weight:800">${g.t1.score}</div></div>
+        </div>
+        <div class="gm-status"><div class="gm-live">● LIVE</div><div class="gm-live" style="font-size:9px;color:var(--t2)">${g.clock}</div></div>
+      </div>`;
+    });
+    h+='</div></div>';
+  }
+
   const rounds=Object.keys(byRound).sort((a,b)=>+a-+b);
   rounds.forEach(rd=>{
     const rg=byRound[rd].sort((a,b)=>{
