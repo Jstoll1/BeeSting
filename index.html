@@ -445,8 +445,11 @@ function renderScores(){
       if(!d.alive){
         cls='cmp-team elim';style='';
       } else if(d.live){
+        const winning=parseInt(d.live.score)>parseInt(d.live.opp);
+        const losing=parseInt(d.live.score)<parseInt(d.live.opp);
+        const scoreColor=winning?'#22c55e':losing?'#ff4757':'#fff';
         cls='cmp-team adv cmp-live';style=`color:${c}`;
-        liveHtml=`<div class="cmp-live-row"><span class="cmp-live-dot"></span><span class="cmp-live-score">${d.live.score}–${d.live.opp}</span><span class="cmp-live-clock">${d.live.clock}</span></div>`;
+        liveHtml=`<div class="cmp-live-row"><span class="cmp-live-dot"></span><span class="cmp-live-score" style="color:${scoreColor}">${d.live.score}–${d.live.opp}</span><span class="cmp-live-clock">${d.live.clock}</span></div>`;
       } else if(d.maxRound>0){
         cls='cmp-team adv';style=`color:${c}`;
         badge=`<span class="cmp-rd" style="color:${c}">${RLS[d.maxRound]}</span>`;
