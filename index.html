@@ -95,6 +95,11 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .cmp-team.pend{color:var(--t2)}
 .cmp-team.elim{color:var(--t4);text-decoration:line-through}
 .cmp-rd{font-size:7px;font-weight:800;letter-spacing:.3px;float:right;margin-top:1px;opacity:.8}
+.cmp-live{background:rgba(34,197,94,0.08);border-left:2px solid var(--live)}
+.cmp-live-row{display:flex;align-items:center;gap:3px;margin-top:1px}
+.cmp-live-dot{width:5px;height:5px;border-radius:50%;background:var(--live);flex-shrink:0;animation:blink 1.6s ease-in-out infinite}
+.cmp-live-score{font-size:9px;font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--live)}
+.cmp-live-clock{font-size:8px;color:var(--t3);font-weight:600}
 
 /* History */
 .titles-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px}
@@ -166,8 +171,8 @@ const NM={
   "saint mary's":"St. Mary's","st. mary's (ca)":"St. Mary's","st. mary's":"St. Mary's",
   "saint louis":"St. Louis","slu":"St. Louis",
   "saint john's":"St. John's","st. john's (ny)":"St. John's",
-  "miami (oh)":"Miami OH","miami oh":"Miami OH","miami ohio":"Miami OH","redhawks":"Miami OH",
-  "miami (fl)":"Miami","miami fl":"Miami",
+  "miami (oh)":"Miami OH","miami oh":"Miami OH","miami ohio":"Miami OH","redhawks":"Miami OH","mioh":"Miami OH",
+  "miami (fl)":"Miami","miami fl":"Miami","mia":"Miami",
   "california baptist":"Cal Baptist","cal baptist":"Cal Baptist",
   "prairie view a&m":"Prairie View","prairie view":"Prairie View",
   "liu":"Long Island","long island university":"Long Island","liu sharks":"Long Island",
@@ -218,11 +223,25 @@ function getSeededGames(){
 }
 const allTeams={};
 PL.forEach(p=>DR[p].forEach((t,i)=>{allTeams[t.toLowerCase()]={player:p,team:t,pick:i+1}}));
+function bestTeam(...names){
+  // Compare matched TEAM name length, not input length
+  // "Miami OH" (8) beats "Miami" (5) → Ryan beats Brad
+  let best=null,bestLen=0;
+  for(const n of names){
+    if(!n)continue;
+    const r=findTeam(n);
+    if(r&&r.team.length>bestLen){best=r;bestLen=r.team.length;}
+  }
+  return best;
+}
 function findTeam(espnName){
   if(!espnName)return null;
   let lo=espnName.toLowerCase().trim();
   if(NM[lo])lo=NM[lo].toLowerCase();
   if(allTeams[lo])return allTeams[lo];
+  // Skip fuzzy matching for short strings — "TEX" must not match "Texas Tech" over "Texas"
+  // Abbreviations only resolve via NM above; fuzzy is for full/partial names only
+  if(lo.length<5)return null;
   // Use longest matching key to avoid "florida" swallowing "south florida", etc.
   let best=null,bestLen=0;
   for(const[k,v]of Object.entries(allTeams)){
@@ -250,13 +269,22 @@ let curRound="Round of 64";
 let openP=new Set(PL);
 function initTeamData(){
   teamData={};
-  PL.forEach(p=>DR[p].forEach(t=>{teamData[t]={alive:true,maxRound:0,wins:[],pts:0}}));
+  PL.forEach(p=>DR[p].forEach(t=>{teamData[t]={alive:true,maxRound:0,wins:[],pts:0,live:null}}));
 }
 function processGames(){
   initTeamData();
   let maxRd=1;hasLive=false;
   games.forEach(g=>{
-    if(g.status==='live')hasLive=true;
+    if(g.status==='live'){
+      hasLive=true;
+      // Attach live score to each team in the game
+      [g.t0,g.t1].forEach((side,i)=>{
+        const other=i===0?g.t1:g.t0;
+        if(side.info&&teamData[side.info.team]){
+          teamData[side.info.team].live={score:side.score,opp:other.score,clock:g.clock};
+        }
+      });
+    }
     if((g.status==='final'||g.status==='live')&&g.rd>maxRd)maxRd=g.rd;
     if(g.rd===0)return; // First Four — no pool points, skip scoring
     if(g.status==='final'){
@@ -309,13 +337,16 @@ async function fetchAll(){
         const note=comp.notes?.[0]?.headline||ev.notes?.[0]?.headline||"";
         const rd=roundFromNote(note);
         const stat=comp.status?.type;
-        const status=stat?.name==='STATUS_FINAL'?'final':stat?.name==='STATUS_IN_PROGRESS'?'live':'sched';
+        const liveStatuses=['STATUS_IN_PROGRESS','STATUS_HALFTIME','STATUS_END_PERIOD','STATUS_OVERTIME'];
+        const status=stat?.name==='STATUS_FINAL'?'final':liveStatuses.includes(stat?.name)?'live':'sched';
         const clock=stat?.shortDetail||comp.status?.displayClock||"";
         const c=comp.competitors||[];
         if(c.length<2)return;
         const t0=c[0],t1=c[1];
-        const info0=findTeam(t0.team?.displayName||t0.team?.shortDisplayName||"");
-        const info1=findTeam(t1.team?.displayName||t1.team?.shortDisplayName||"");
+        // Pick the result from the longest matching input — more specific name wins
+        // e.g. "Miami OH" (8 chars) beats "Miami" (5 chars) so Ryan beats Brad
+        const info0=bestTeam(t0.team?.displayName,t0.team?.shortDisplayName,t0.team?.abbreviation);
+        const info1=bestTeam(t1.team?.displayName,t1.team?.shortDisplayName,t1.team?.abbreviation);
         const g={
           id:ev.id,rd,status,clock,
           name:ev.shortName||ev.name||"",
@@ -335,7 +366,7 @@ async function fetchAll(){
       if((!wt||!espnTeams.has(wt))&&(!lt||!espnTeams.has(lt)))games.push(sg);
     });
     processGames();
-    try{localStorage.setItem("ncaa26g",JSON.stringify({games,ts:Date.now()}))}catch{}
+    try{localStorage.setItem("ncaa26g",JSON.stringify({games,ts:Date.now(),v:3}))}catch{}
     if(st)st.innerHTML=`<span class="status-line ok">✓ ${games.length} tournament games loaded</span>`;
     setTimeout(()=>{if(st)st.textContent=''},4000);
   }catch(e){
@@ -346,7 +377,8 @@ async function fetchAll(){
   renderAll();
 }
 function loadCache(){
-  try{const c=JSON.parse(localStorage.getItem("ncaa26g"));if(c?.games){games=c.games;processGames();return true}}catch{}
+  try{const c=JSON.parse(localStorage.getItem("ncaa26g"));if(c?.games&&c?.v===3){games=c.games;processGames();return true}}catch{}
+  try{localStorage.removeItem("ncaa26g")}catch{} // clear stale cache with wrong owner tags
   // No cache: seed known R1 results so scores show instantly before ESPN loads
   games=getSeededGames();
   processGames();
@@ -371,6 +403,26 @@ function renderScores(){
   });
   h+='</div></div>';
 
+  // ── Live Now section ──
+  const liveGames=games.filter(g=>g.status==='live');
+  if(liveGames.length){
+    h+='<div class="sec"><div class="sec-label" style="color:var(--live)">● Live Now</div><div class="gc">';
+    liveGames.forEach(g=>{
+      function liveRow(t,other){
+        const oc=t.owner?PC[t.owner]:null;
+        return `<div class="gm-row">
+          ${t.logo?`<img class="gm-logo" src="${t.logo}" alt="">`:''}<div class="gm-name">${t.name}</div>
+          ${t.owner?`<span class="gm-owner" style="background:${oc}18;color:${oc}">${t.owner}</span>`:''}
+          <div class="gm-sc" style="color:#fff;font-weight:800">${t.score}</div></div>`;
+      }
+      h+=`<div class="gm">
+        <div class="gm-teams">${liveRow(g.t0,g.t1)}${liveRow(g.t1,g.t0)}</div>
+        <div class="gm-status"><div class="gm-live">● LIVE</div><div class="gm-live" style="font-size:9px;color:var(--t2)">${g.clock}</div></div>
+      </div>`;
+    });
+    h+='</div></div>';
+  }
+
   // ── Side-by-side roster grid ──
   h+='<div class="sec"><div class="sec-label">Rosters</div><div class="compare">';
   sorted.forEach(p=>{
@@ -382,20 +434,20 @@ function renderScores(){
         <div class="cmp-hdr-pts" style="color:${c}">${tot}</div>
       </div>`;
     DR[p].forEach(t=>{
-      const d=teamData[t]||{alive:true,maxRound:0,pts:0};
-      let cls,style,badge='';
+      const d=teamData[t]||{alive:true,maxRound:0,pts:0,live:null};
+      let cls,style,badge='',liveHtml='';
       if(!d.alive){
-        cls='cmp-team elim';
-        style='';
+        cls='cmp-team elim';style='';
+      } else if(d.live){
+        cls='cmp-team adv cmp-live';style=`color:${c}`;
+        liveHtml=`<div class="cmp-live-row"><span class="cmp-live-dot"></span><span class="cmp-live-score">${d.live.score}–${d.live.opp}</span><span class="cmp-live-clock">${d.live.clock}</span></div>`;
       } else if(d.maxRound>0){
-        cls='cmp-team adv';
-        style=`color:${c}`;
+        cls='cmp-team adv';style=`color:${c}`;
         badge=`<span class="cmp-rd" style="color:${c}">${RLS[d.maxRound]}</span>`;
       } else {
-        cls='cmp-team pend';
-        style='';
+        cls='cmp-team pend';style='';
       }
-      h+=`<div class="${cls}" style="${style}" title="${t}">${badge}${t}</div>`;
+      h+=`<div class="${cls}" style="${style}" title="${t}">${badge}${t}${liveHtml}</div>`;
     });
     h+='</div>';
   });
