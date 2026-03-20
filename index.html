@@ -367,7 +367,6 @@ function renderScores(){
       <div class="sb-rank" style="color:${c};text-shadow:0 0 25px ${c}30">${sc[p]}</div>
       <div class="sb-name" style="color:${c}">${p}</div>
       <div class="sb-meta"><span style="color:${c}">${al}</span>/16<br>#${i+1}</div>
-      <div class="sb-max">max <span style="color:${c}">${mx[p]}</span></div>
     </div>`;
   });
   h+='</div></div>';
@@ -381,7 +380,6 @@ function renderScores(){
       <div class="cmp-hdr" style="border-top:2px solid ${c}">
         <div class="cmp-hdr-name" style="color:${c}">${p}</div>
         <div class="cmp-hdr-pts" style="color:${c}">${tot}</div>
-        <div class="cmp-hdr-max">max ${mx[p]}</div>
       </div>`;
     DR[p].forEach(t=>{
       const d=teamData[t]||{alive:true,maxRound:0,pts:0};
