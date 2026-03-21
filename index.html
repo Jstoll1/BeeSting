@@ -776,16 +776,26 @@ function renderBracket(){
     ${ln}${tm}
   </svg>`;
 
-  // Pinch-zoom + pan wrapper
-  el.innerHTML=`<div id="brk-wrap" style="overflow:hidden;width:100%;height:calc(100dvh - 170px);position:relative;touch-action:none;cursor:grab;background:#08080e">
-    <div id="brk-inner" style="position:absolute;will-change:transform;transform-origin:0 0;transform:translate(0px,4px) scale(0.285)">${svg}</div>
-    <div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:10px;color:#252535;font-weight:600;letter-spacing:1px;pointer-events:none">PINCH TO ZOOM · DRAG TO PAN</div>
-  </div>`;
+  // Color key + pinch-zoom wrapper
+  const keyHtml=PL.map(p=>`<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px">
+    <span style="width:8px;height:8px;border-radius:50%;background:${PC[p]};box-shadow:0 0 6px ${PC[p]}80;flex-shrink:0"></span>
+    <span style="font-size:11px;font-weight:700;color:${PC[p]}">${p}</span>
+  </span>`).join('');
+
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;padding:8px 16px 4px;gap:2px">${keyHtml}</div>
+    <div id="brk-wrap" style="overflow:hidden;width:100%;height:calc(100dvh - 200px);position:relative;touch-action:none;cursor:grab;background:#08080e">
+      <div id="brk-inner" style="position:absolute;will-change:transform;transform-origin:0 0">${svg}</div>
+      <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:9px;color:#1e1e2e;font-weight:700;letter-spacing:1.5px;pointer-events:none;white-space:nowrap">PINCH TO ZOOM · DRAG TO PAN</div>
+    </div>`;
 
   // Touch & mouse controls
   const wrap=document.getElementById('brk-wrap'),inner=document.getElementById('brk-inner');
-  let sc=0.285,tx=0,ty=4,sd=0,ss=0,lx2=0,ly2=0,pan=false;
+  // Center bracket horizontally on load
+  const sc0=0.285,ww=wrap.offsetWidth||390;
+  let sc=sc0,tx=Math.max(0,(ww-W*sc0)/2),ty=4,sd=0,ss=0,lx2=0,ly2=0,pan=false;
   const apply=()=>inner.style.transform=`translate(${tx}px,${ty}px) scale(${sc})`;
+  apply();
   wrap.addEventListener('touchstart',e=>{
     if(e.touches.length===2){sd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);ss=sc;}
     else if(e.touches.length===1){pan=true;lx2=e.touches[0].clientX;ly2=e.touches[0].clientY;}
