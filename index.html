@@ -101,6 +101,28 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .cmp-live-score{font-size:9px;font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--live)}
 .cmp-live-clock{font-size:8px;color:var(--t3);font-weight:600}
 
+/* Bracket */
+.br-nav{display:flex;gap:6px;overflow-x:auto;padding:0 16px 12px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.br-nav::-webkit-scrollbar{display:none}
+.br-pill{flex-shrink:0;padding:6px 14px;border-radius:100px;border:1px solid var(--bd);background:var(--gl);color:var(--t3);font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap}
+.br-pill.active{background:rgba(255,255,255,.1);border-color:var(--bh);color:#fff}
+.br-pill.has-live{border-color:rgba(34,197,94,.4);color:var(--live)}
+.br-matchup{border-radius:12px;overflow:hidden;border:1px solid var(--bd);margin-bottom:8px;background:var(--gl)}
+.br-matchup.is-live{border-color:rgba(34,197,94,.3);box-shadow:0 0 12px rgba(34,197,94,.08)}
+.br-team{display:flex;align-items:center;gap:8px;padding:10px 12px;position:relative}
+.br-team:first-child{border-bottom:1px solid var(--bd)}
+.br-team-bar{position:absolute;left:0;top:0;bottom:0;width:3px}
+.br-logo{width:22px;height:22px;object-fit:contain;border-radius:4px;flex-shrink:0}
+.br-logo-ph{width:22px;height:22px;border-radius:4px;background:rgba(255,255,255,.04);flex-shrink:0}
+.br-seed{font-size:10px;font-weight:700;color:var(--t3);min-width:14px}
+.br-name{flex:1;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.br-name.winner{font-weight:800;color:#fff}
+.br-name.loser{color:var(--t4);text-decoration:line-through}
+.br-owner{font-size:8px;font-weight:700;letter-spacing:.5px;border-radius:3px;padding:1px 5px;flex-shrink:0}
+.br-score{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:800;min-width:28px;text-align:right;flex-shrink:0}
+.br-badge{font-size:9px;font-weight:700;padding:3px 8px;border-radius:100px;text-align:center;margin:0 12px 8px;display:inline-block}
+.br-rounds{padding:0 16px}
+
 /* History */
 .titles-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px}
 .title-item{border-radius:12px;padding:16px 4px;text-align:center;background:var(--gl);border:1px solid var(--bd);position:relative;overflow:hidden}
@@ -139,11 +161,13 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   <button class="tab" data-tab="games">Games</button>
   <button class="tab" data-tab="history">History</button>
   <button class="tab" data-tab="rules">Rules</button>
+  <button class="tab" data-tab="bracket">Bracket</button>
 </div>
 <div id="tab-scores"></div>
 <div id="tab-games" class="hidden"></div>
 <div id="tab-history" class="hidden"></div>
 <div id="tab-rules" class="hidden"></div>
+<div id="tab-bracket" class="hidden"></div>
 <div class="footer">Est. 2013 · Brad · John · Ross · Ryan</div>
 <script>
 const PL=["Ryan","Brad","John","Ross"];
@@ -175,7 +199,7 @@ const NM={
   "saint john's":"St. John's","st. john's (ny)":"St. John's",
   "miami (oh)":"Miami OH","miami oh":"Miami OH","miami ohio":"Miami OH","redhawks":"Miami OH","mioh":"Miami OH",
   "miami (fl)":"Miami","miami fl":"Miami","mia":"Miami",
-  "california baptist":"Cal Baptist","cal baptist":"Cal Baptist",
+  "california baptist":"Cal Baptist","cal baptist":"Cal Baptist","cbu":"Cal Baptist","calif. baptist":"Cal Baptist","cal. baptist":"Cal Baptist","california baptist university":"Cal Baptist",
   "prairie view a&m":"Prairie View","prairie view":"Prairie View",
   "liu":"Long Island","long island university":"Long Island","liu sharks":"Long Island",
   "central florida":"UCF","ucf":"UCF",
@@ -376,7 +400,7 @@ async function fetchAll(){
       if((!wt||!espnTeams.has(wt))&&(!lt||!espnTeams.has(lt)))games.push(sg);
     });
     processGames();
-    try{localStorage.setItem("ncaa26g",JSON.stringify({games,ts:Date.now(),v:3}))}catch{}
+    try{localStorage.setItem("ncaa26g",JSON.stringify({games,ts:Date.now(),v:4}))}catch{}
     if(st)st.innerHTML=`<span class="status-line ok">✓ ${games.length} tournament games loaded</span>`;
     setTimeout(()=>{if(st)st.textContent=''},4000);
   }catch(e){
@@ -387,7 +411,7 @@ async function fetchAll(){
   renderAll();
 }
 function loadCache(){
-  try{const c=JSON.parse(localStorage.getItem("ncaa26g"));if(c?.games&&c?.v===3){games=c.games;processGames();return true}}catch{}
+  try{const c=JSON.parse(localStorage.getItem("ncaa26g"));if(c?.games&&c?.v===4){games=c.games;processGames();return true}}catch{}
   try{localStorage.removeItem("ncaa26g")}catch{} // clear stale cache with wrong owner tags
   // No cache: seed known R1 results so scores show instantly before ESPN loads
   games=getSeededGames();
@@ -586,10 +610,158 @@ function renderRules(){
 
   document.getElementById("tab-rules").innerHTML=h;
 }
-function renderAll(){renderScores();renderGames();renderHistory();renderRules()}
+function renderBracket(){
+  const el=document.getElementById('tab-bracket');
+  // Sort each round by ESPN game ID (approx. bracket order)
+  const byRd={};
+  games.filter(g=>g.rd>0).forEach(g=>{if(!byRd[g.rd])byRd[g.rd]=[];byRd[g.rd].push(g)});
+  Object.values(byRd).forEach(arr=>arr.sort((a,b)=>String(a.id)<String(b.id)?-1:1));
+
+  // Layout constants
+  const SH=26,MW=108,CW=18,RW=MW+CW,YO=22;
+  // matchTopY: vertical position for match i in round rd (0-indexed)
+  const mTop=(rd,i)=>(Math.pow(2,rd-1)-1)*SH+i*Math.pow(2,rd)*SH+YO;
+  const mCen=(rd,i)=>mTop(rd,i)+SH;
+  // Column X positions
+  const lx=rd=>(rd-1)*RW;            // left side: R1=0,R2=126,S16=252,E8=378,F4=504
+  const champX=5*RW;                  // 630
+  const rx=rd=>(10-rd+1)*RW;         // right side: R1=1260,R2=1134,S16=1008,E8=882,F4=756
+  const W=1260+MW,H=32*SH+YO+14;    // 1368 × 870
+
+  // Truncate name to fit slot
+  const nm=n=>n&&n.length>13?n.slice(0,12)+'…':n||'TBD';
+
+  // Single team row SVG
+  function slotSVG(x,y,g,side){
+    if(!g)return `<rect x="${x}" y="${y}" width="${MW}" height="${SH}" fill="rgba(255,255,255,.025)" rx="0"/>
+      <text x="${x+6}" y="${y+17}" fill="#2a2a3a" font-size="11" font-family="DM Sans,sans-serif">TBD</text>`;
+    const t=side===0?g.t0:g.t1;
+    const fin=g.status==='final',live=g.status==='live';
+    const win=fin&&t.winner,los=fin&&!t.winner;
+    const oc=t.owner?PC[t.owner]:null;
+    const ms=parseInt(side===0?g.t0.score:g.t1.score)||0;
+    const os=parseInt(side===0?g.t1.score:g.t0.score)||0;
+    const sc=live?(ms>os?'#22c55e':ms<os?'#ff4757':'#ccc'):(win?'#fff':los?'#2e2e40':'#777');
+    const nc=los?'#2e2e40':win?'#fff':'#8888a8';
+    let o=`<rect x="${x}" y="${y}" width="${MW}" height="${SH}" fill="${oc?oc+'09':'rgba(255,255,255,.02)'}" rx="0"/>`;
+    if(oc)o+=`<rect x="${x}" y="${y}" width="3" height="${SH}" fill="${oc}bb" rx="0"/>`;
+    if(live)o+=`<rect x="${x}" y="${y}" width="${MW}" height="${SH}" fill="rgba(34,197,94,.05)" rx="0"/>`;
+    if(los)o+=`<line x1="${x+5}" y1="${y+SH/2}" x2="${x+MW-32}" y2="${y+SH/2}" stroke="#2e2e40" stroke-width="1"/>`;
+    o+=`<text x="${x+(oc?7:5)}" y="${y+17}" fill="${nc}" font-size="11" font-family="DM Sans,sans-serif" font-weight="${win?700:400}">${nm(t.name)}</text>`;
+    if(fin||live)o+=`<text x="${x+MW-4}" y="${y+17}" fill="${sc}" font-size="12" font-family="JetBrains Mono,monospace" font-weight="800" text-anchor="end">${t.score||''}</text>`;
+    if(live)o+=`<circle cx="${x+MW-18}" cy="${y+SH/2}" r="3" fill="#22c55e"><animate attributeName="opacity" values="1;0.2;1" dur="1.6s" repeatCount="indefinite"/></circle>`;
+    return o;
+  }
+
+  // Full matchup (2 slots + border)
+  function matchSVG(x,topY,g){
+    const mid=topY+SH;
+    let o=slotSVG(x,topY,g,0);
+    o+=`<line x1="${x}" y1="${mid}" x2="${x+MW}" y2="${mid}" stroke="#111118" stroke-width="1"/>`;
+    o+=slotSVG(x,mid,g,1);
+    o+=`<rect x="${x}" y="${topY}" width="${MW}" height="${SH*2}" fill="none" stroke="#1e1e2e" stroke-width="1" rx="2"/>`;
+    return o;
+  }
+
+  // Connector: left-side (exits right edge, enters next col left edge)
+  const connL=(fromX,cy,toX,tcy)=>`<path d="M${fromX+MW},${cy} H${fromX+MW+CW/2} V${tcy} H${toX}" stroke="#1a1a28" stroke-width="1" fill="none"/>`;
+  // Connector: right-side (exits left edge, enters next col right edge)
+  const connR=(fromX,cy,toX,tcy)=>`<path d="M${fromX},${cy} H${fromX-CW/2} V${tcy} H${toX+MW}" stroke="#1a1a28" stroke-width="1" fill="none"/>`;
+
+  let ln='',tm='';
+
+  // Round column labels
+  [['R64',lx(1)],['R32',lx(2)],['S16',lx(3)],['E8',lx(4)],['F4',lx(5)],['★',champX],['F4',rx(5)],['E8',rx(4)],['S16',rx(3)],['R32',rx(2)],['R64',rx(1)]].forEach(([lbl,x])=>{
+    tm+=`<text x="${x+MW/2}" y="${YO-6}" fill="${lbl==='★'?'#e63946':'#252535'}" font-size="9" text-anchor="middle" font-family="DM Sans,sans-serif" font-weight="700" letter-spacing="1.5">${lbl}</text>`;
+  });
+
+  // Left side: R1 → E8, with connectors to next round
+  [1,2,3,4].forEach(rd=>{
+    const all=byRd[rd]||[];
+    const half=Math.ceil(all.length/2);
+    const leftG=all.slice(0,half);
+    const count=16>>>(rd-1); // 16,8,4,2
+    const x=lx(rd);
+    for(let i=0;i<count;i++){
+      tm+=matchSVG(x,mTop(rd,i),leftG[i]||null);
+      if(rd<5&&i%2===0){
+        const ni=Math.floor(i/2);
+        const ncy=mCen(rd+1,ni),nx=lx(rd+1);
+        ln+=connL(x,mCen(rd,i),nx,ncy);
+        ln+=connL(x,mCen(rd,i+1),nx,ncy);
+      }
+    }
+  });
+
+  // F4 left + connector to champ
+  {const f4=byRd[5]||[];tm+=matchSVG(lx(5),mTop(5,0),f4[0]||null);
+  ln+=`<path d="M${lx(5)+MW},${mCen(5,0)} H${champX}" stroke="#1a1a28" stroke-width="1" fill="none"/>`;}
+
+  // Championship
+  {const cg=byRd[6]||[];tm+=matchSVG(champX,mTop(5,0),cg[0]||null);}
+
+  // F4 right + connector to champ
+  {const f4=byRd[5]||[];tm+=matchSVG(rx(5),mTop(5,0),f4[1]||null);
+  ln+=`<path d="M${rx(5)},${mCen(5,0)} H${champX+MW}" stroke="#1a1a28" stroke-width="1" fill="none"/>`;}
+
+  // Right side: E8 → R1, with connectors
+  [4,3,2,1].forEach(rd=>{
+    const all=byRd[rd]||[];
+    const half=Math.ceil(all.length/2);
+    const rightG=all.slice(half);
+    const count=16>>>(rd-1);
+    const x=rx(rd);
+    for(let i=0;i<count;i++){
+      tm+=matchSVG(x,mTop(rd,i),rightG[i]||null);
+      if(rd<5&&i%2===0){
+        const ni=Math.floor(i/2);
+        const ncy=mCen(rd+1,ni),nx=rx(rd+1);
+        ln+=connR(x,mCen(rd,i),nx,ncy);
+        ln+=connR(x,mCen(rd,i+1),nx,ncy);
+      }
+    }
+    // E8 → F4 right
+    if(rd===4){
+      ln+=connR(x,mCen(4,0),rx(5),mCen(5,0));
+      ln+=connR(x,mCen(4,1),rx(5),mCen(5,0));
+    }
+  });
+
+  const svg=`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;background:#08080e;border-radius:0">
+    <rect width="${W}" height="${H}" fill="#08080e"/>
+    ${ln}${tm}
+  </svg>`;
+
+  // Pinch-zoom + pan wrapper
+  el.innerHTML=`<div id="brk-wrap" style="overflow:hidden;width:100%;height:calc(100dvh - 170px);position:relative;touch-action:none;cursor:grab;background:#08080e">
+    <div id="brk-inner" style="position:absolute;will-change:transform;transform-origin:0 0;transform:translate(0px,4px) scale(0.285)">${svg}</div>
+    <div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:10px;color:#252535;font-weight:600;letter-spacing:1px;pointer-events:none">PINCH TO ZOOM · DRAG TO PAN</div>
+  </div>`;
+
+  // Touch & mouse controls
+  const wrap=document.getElementById('brk-wrap'),inner=document.getElementById('brk-inner');
+  let sc=0.285,tx=0,ty=4,sd=0,ss=0,lx2=0,ly2=0,pan=false;
+  const apply=()=>inner.style.transform=`translate(${tx}px,${ty}px) scale(${sc})`;
+  wrap.addEventListener('touchstart',e=>{
+    if(e.touches.length===2){sd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);ss=sc;}
+    else if(e.touches.length===1){pan=true;lx2=e.touches[0].clientX;ly2=e.touches[0].clientY;}
+  },{passive:true});
+  wrap.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    if(e.touches.length===2){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);sc=Math.min(3,Math.max(0.15,ss*d/sd));apply();}
+    else if(e.touches.length===1&&pan){tx+=e.touches[0].clientX-lx2;ty+=e.touches[0].clientY-ly2;lx2=e.touches[0].clientX;ly2=e.touches[0].clientY;apply();}
+  },{passive:false});
+  wrap.addEventListener('touchend',e=>{if(e.touches.length<1)pan=false;},{passive:true});
+  wrap.addEventListener('mousedown',e=>{pan=true;lx2=e.clientX;ly2=e.clientY;wrap.style.cursor='grabbing';});
+  wrap.addEventListener('mousemove',e=>{if(!pan)return;tx+=e.clientX-lx2;ty+=e.clientY-ly2;lx2=e.clientX;ly2=e.clientY;apply();});
+  wrap.addEventListener('mouseup',()=>{pan=false;wrap.style.cursor='grab';});
+  wrap.addEventListener('mouseleave',()=>{pan=false;wrap.style.cursor='grab';});
+  wrap.addEventListener('wheel',e=>{e.preventDefault();sc=Math.min(3,Math.max(0.15,sc*(e.deltaY<0?1.1:0.9)));apply();},{passive:false});
+}
+function renderAll(){renderScores();renderGames();renderHistory();renderRules();renderBracket()}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));
-  ["scores","games","history","rules"].forEach(id=>document.getElementById("tab-"+id).classList.toggle("hidden",id!==b.dataset.tab));
+  ["scores","games","history","rules","bracket"].forEach(id=>document.getElementById("tab-"+id).classList.toggle("hidden",id!==b.dataset.tab));
 }));
 initTeamData();
 const cached=loadCache();
