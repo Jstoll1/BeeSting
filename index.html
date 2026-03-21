@@ -203,7 +203,7 @@ const NM={
   "miami (fl)":"Miami","miami fl":"Miami","mia":"Miami",
   "california baptist":"Cal Baptist","cal baptist":"Cal Baptist","cbu":"Cal Baptist","calif. baptist":"Cal Baptist","cal. baptist":"Cal Baptist","california baptist university":"Cal Baptist",
   "prairie view a&m":"Prairie View","prairie view":"Prairie View",
-  "liu":"Long Island","long island university":"Long Island","liu sharks":"Long Island",
+  "liu":"Long Island","long island university":"Long Island","liu sharks":"Long Island","liu brooklyn":"Long Island",
   "central florida":"UCF","ucf":"UCF",
   "northern iowa":"Northern Iowa","uni":"Northern Iowa","n. iowa":"Northern Iowa",
   "mcneese state":"McNeese","mcneese st.":"McNeese","mcneese":"McNeese",
@@ -218,25 +218,51 @@ const NM={
   "michigan state":"Michigan State","msu":"Michigan State",
   "wright state":"Wright State",
   "tennessee state":"Tennessee State",
+  "hawai\u02bbi":"Hawaii","hawai\u02bbi rainbow warriors":"Hawaii","hawaii rainbow warriors":"Hawaii",
+  "utah state":"Utah State","utah st.":"Utah State","utah st":"Utah State",
+  "queens (n.c.)":"Queens","queens nc":"Queens",
+  "hofstra":"Hofstra",
+  "akron":"Akron","the university of akron":"Akron",
+  "saint mary's (ca)":"St. Mary's",
 };
-// Confirmed R1 results from research — used as fallback when ESPN unavailable
+// All 32 R1 results — used as fallback when ESPN unavailable
 const KNOWN_RESULTS=[
-  {rd:1,w:'Duke',        l:'Siena',            ws:71, ls:65},
-  {rd:1,w:'Vanderbilt',  l:'McNeese',          ws:78, ls:68},
-  {rd:1,w:'Texas',       l:'BYU',              ws:79, ls:71},
-  {rd:1,w:'Illinois',    l:'Penn',             ws:105,ls:70},
-  {rd:1,w:'VCU',         l:'UNC',              ws:82, ls:78},
-  {rd:1,w:'High Point',  l:'Wisconsin',        ws:83, ls:82},
-  {rd:1,w:'Nebraska',    l:'Troy',             ws:76, ls:47},
-  {rd:1,w:'Gonzaga',     l:'Kennesaw State',   ws:73, ls:64},
-  {rd:1,w:'Michigan',    l:'Howard',           ws:101,ls:80},
-  {rd:1,w:"Michigan State",l:'North Dakota State',ws:92,ls:67},
-  {rd:1,w:"Texas A&M",  l:"St. Mary's",        ws:63, ls:50},
-  {rd:1,w:'Louisville',  l:'South Florida',    ws:83, ls:79},
-  {rd:1,w:'TCU',         l:'Ohio State',        ws:66, ls:64},
-  {rd:1,w:'Arkansas',    l:'Hawaii',           ws:97, ls:78},
-  {rd:1,w:'Houston',     l:'Idaho',            ws:78, ls:47},
-  {rd:1,w:'St. Louis',  l:'Georgia',          ws:102,ls:77},
+  // EAST
+  {rd:1,w:'Duke',         l:'Siena',              ws:71, ls:65},
+  {rd:1,w:'TCU',          l:'Ohio State',          ws:66, ls:64},
+  {rd:1,w:"St. John's",   l:'Northern Iowa',       ws:79, ls:53},
+  {rd:1,w:'Kansas',       l:'Cal Baptist',         ws:68, ls:60},
+  {rd:1,w:'Louisville',   l:'South Florida',       ws:83, ls:79},
+  {rd:1,w:'Michigan State',l:'North Dakota State', ws:92, ls:67},
+  {rd:1,w:'UCLA',         l:'UCF',                 ws:75, ls:71},
+  {rd:1,w:'UConn',        l:'Furman',              ws:82, ls:71},
+  // SOUTH
+  {rd:1,w:'Florida',      l:'Prairie View',        ws:114,ls:55},
+  {rd:1,w:'Iowa',         l:'Clemson',             ws:67, ls:61},
+  {rd:1,w:'Vanderbilt',   l:'McNeese',             ws:78, ls:68},
+  {rd:1,w:'Nebraska',     l:'Troy',                ws:76, ls:47},
+  {rd:1,w:'VCU',          l:'UNC',                 ws:82, ls:78},
+  {rd:1,w:'Illinois',     l:'Penn',                ws:105,ls:70},
+  {rd:1,w:'Texas A&M',    l:"St. Mary's",          ws:63, ls:50},
+  {rd:1,w:'Houston',      l:'Idaho',               ws:78, ls:47},
+  // WEST
+  {rd:1,w:'Arizona',      l:'Long Island',         ws:92, ls:58},
+  {rd:1,w:'Utah State',   l:'Villanova',           ws:86, ls:76},
+  {rd:1,w:'High Point',   l:'Wisconsin',           ws:83, ls:82},
+  {rd:1,w:'Arkansas',     l:'Hawaii',              ws:97, ls:78},
+  {rd:1,w:'Texas',        l:'BYU',                 ws:79, ls:71},
+  {rd:1,w:'Gonzaga',      l:'Kennesaw State',      ws:73, ls:64},
+  {rd:1,w:'Miami',        l:'Missouri',            ws:80, ls:66},
+  {rd:1,w:'Purdue',       l:'Queens',              ws:104,ls:71},
+  // MIDWEST
+  {rd:1,w:'Michigan',     l:'Howard',              ws:101,ls:80},
+  {rd:1,w:'St. Louis',    l:'Georgia',             ws:102,ls:77},
+  {rd:1,w:'Texas Tech',   l:'Akron',               ws:91, ls:71},
+  {rd:1,w:'Alabama',      l:'Hofstra',             ws:90, ls:70},
+  {rd:1,w:'Tennessee',    l:'Miami OH',            ws:78, ls:56},
+  {rd:1,w:'Virginia',     l:'Wright State',        ws:82, ls:73},
+  {rd:1,w:'Kentucky',     l:'Santa Clara',         ws:89, ls:84},
+  {rd:1,w:'Iowa State',   l:'Tennessee State',     ws:108,ls:74},
 ];
 function getSeededGames(){
   return KNOWN_RESULTS.map((r,i)=>{
@@ -414,14 +440,19 @@ async function fetchAll(){
       });
     });
     // Fill in any R1 results ESPN missed with our known data
-    const espnTeams=new Set();
-    games.forEach(g=>{if(g.t0.info)espnTeams.add(g.t0.info.team);if(g.t1.info)espnTeams.add(g.t1.info.team)});
+    // Check by specific game pairing, not just team presence in espnTeams
+    const espnPairs=new Set();
+    games.forEach(g=>{
+      const t0=g.t0.info?.team,t1=g.t1.info?.team;
+      if(t0&&t1){espnPairs.add(t0+'|'+t1);espnPairs.add(t1+'|'+t0);}
+    });
     getSeededGames().forEach(sg=>{
       const wt=sg.w1?.team,lt=sg.l1?.team;
-      if((!wt||!espnTeams.has(wt))&&(!lt||!espnTeams.has(lt)))games.push(sg);
+      if(wt&&lt&&!espnPairs.has(wt+'|'+lt)){games.push(sg);espnPairs.add(wt+'|'+lt);espnPairs.add(lt+'|'+wt);}
+      else if(!wt&&!lt)games.push(sg);
     });
     processGames();
-    try{localStorage.setItem("ncaa26g",JSON.stringify({games,ts:Date.now(),v:4}))}catch{}
+    try{localStorage.setItem("ncaa26g",JSON.stringify({games,ts:Date.now(),v:5}))}catch{}
     if(st)st.innerHTML=`<span class="status-line ok">✓ ${games.length} tournament games loaded</span>`;
     setTimeout(()=>{if(st)st.textContent=''},4000);
   }catch(e){
@@ -432,7 +463,7 @@ async function fetchAll(){
   renderAll();
 }
 function loadCache(){
-  try{const c=JSON.parse(localStorage.getItem("ncaa26g"));if(c?.games&&c?.v===4){games=c.games;processGames();return true}}catch{}
+  try{const c=JSON.parse(localStorage.getItem("ncaa26g"));if(c?.games&&c?.v===5){games=c.games;processGames();return true}}catch{}
   try{localStorage.removeItem("ncaa26g")}catch{} // clear stale cache with wrong owner tags
   // No cache: seed known R1 results so scores show instantly before ESPN loads
   games=getSeededGames();
@@ -684,18 +715,21 @@ function renderBracket(){
     ['Tennessee','Miami OH'],['Virginia','Wright State'],['Kentucky','Santa Clara'],['Iowa State','Tennessee State'],
   ];
 
-  // Find game in games[] for two pool-canonical team names
-  function findG(a,b){
-    const norm=n=>n?(findTeam(n)?.team||n):null;
-    const pA=norm(a),pB=norm(b);
-    if(!pA&&!pB)return null;
-    for(const g of games){
-      const g0=g.t0.info?.team,g1=g.t1.info?.team;
-      if(pA&&pB){if((g0===pA&&g1===pB)||(g0===pB&&g1===pA))return g;}
-      else if(pA){if(g0===pA||g1===pA)return g;}
-      else if(pB){if(g0===pB||g1===pB)return g;}
+  // Pre-build lookup map: "TeamA|TeamB" → game (both orderings)
+  const gMap=new Map();
+  games.forEach(g=>{
+    const t0=g.t0.info?.team,t1=g.t1.info?.team;
+    if(t0&&t1){
+      if(!gMap.has(t0+'|'+t1))gMap.set(t0+'|'+t1,g);
+      if(!gMap.has(t1+'|'+t0))gMap.set(t1+'|'+t0,g);
     }
-    return null;
+  });
+  // Find game — ONLY matches when BOTH teams are known (no single-team fallback)
+  function findG(a,b){
+    if(!a||!b)return null;
+    const norm=n=>{const ft=findTeam(n);return ft?ft.team:n;};
+    const pA=norm(a),pB=norm(b);
+    return gMap.get(pA+'|'+pB)||gMap.get(pB+'|'+pA)||null;
   }
   // Get pool name of winner from a bracket slot
   function winnerOf(slot){
@@ -719,9 +753,23 @@ function renderBracket(){
     return T;
   }
   // Convert bracket slot → game-like object for rendering
+  // IMPORTANT: Always show teams in slot order (slot.t0 on top, slot.t1 on bottom)
+  // even if the underlying game object stored winner as t0 (e.g. upsets)
   function toGame(slot){
     if(!slot)return null;
-    if(slot.game)return slot.game;
+    if(slot.game){
+      const g=slot.game;
+      // Check if game's t0 matches slot's expected t0 — if not, swap for correct display
+      if(slot.t0&&slot.t1){
+        const sT0=findTeam(slot.t0)?.team||slot.t0;
+        const gT0=g.t0.info?.team;
+        // Only swap when both are resolved and they disagree
+        if(gT0&&sT0!==gT0){
+          return{...g,t0:g.t1,t1:g.t0};
+        }
+      }
+      return g;
+    }
     const mkT=n=>{
       if(!n)return{name:'TBD',score:'',winner:false,info:null,owner:null,logo:''};
       const info=findTeam(n);
@@ -824,10 +872,6 @@ function renderBracket(){
         ln+=connR(x,mCen(rd,i+1),nx,ncy);
       }
     }
-    if(rd===4){
-      ln+=connR(x,mCen(4,0),rx(5),mCen(5,0));
-      ln+=connR(x,mCen(4,1),rx(5),mCen(5,0));
-    }
   });
 
   const svg=`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;background:#08080e;border-radius:0">
@@ -888,5 +932,6 @@ let lastRefresh=Date.now();
 const origFetch=fetchAll;
 fetchAll=async function(){lastRefresh=Date.now();return origFetch()};
 </script>
+<script data-goatcounter="https://calcutta.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>
