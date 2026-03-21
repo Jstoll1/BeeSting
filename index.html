@@ -414,15 +414,17 @@ function renderScores(){
   if(liveGames.length){
     h+='<div class="sec"><div class="sec-label" style="color:var(--live)">● Live Now</div><div class="gc">';
     liveGames.forEach(g=>{
-      function liveRow(t,other){
+      const s0=parseInt(g.t0.score)||0,s1=parseInt(g.t1.score)||0;
+      function liveRow(t,myScore,oppScore){
         const oc=t.owner?PC[t.owner]:null;
+        const sc=myScore>oppScore?'#22c55e':myScore<oppScore?'#ff4757':'#fff';
         return `<div class="gm-row">
           ${t.logo?`<img class="gm-logo" src="${t.logo}" alt="">`:''}<div class="gm-name">${t.name}</div>
           ${t.owner?`<span class="gm-owner" style="background:${oc}18;color:${oc}">${t.owner}</span>`:''}
-          <div class="gm-sc" style="color:#fff;font-weight:800">${t.score}</div></div>`;
+          <div class="gm-sc" style="color:${sc};font-weight:800">${t.score}</div></div>`;
       }
       h+=`<div class="gm">
-        <div class="gm-teams">${liveRow(g.t0,g.t1)}${liveRow(g.t1,g.t0)}</div>
+        <div class="gm-teams">${liveRow(g.t0,s0,s1)}${liveRow(g.t1,s1,s0)}</div>
         <div class="gm-status"><div class="gm-live">● LIVE</div><div class="gm-live" style="font-size:9px;color:var(--t2)">${g.clock}</div></div>
       </div>`;
     });
