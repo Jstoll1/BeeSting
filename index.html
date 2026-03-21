@@ -314,7 +314,7 @@ function processGames(){
       // Attach live score to each team in the game
       [g.t0,g.t1].forEach((side,i)=>{
         const other=i===0?g.t1:g.t0;
-        if(side.info&&teamData[side.info.team]){
+        if(side.info&&teamData[side.info.team]&&teamData[side.info.team].alive!==false){
           teamData[side.info.team].live={score:side.score,opp:other.score,clock:g.clock};
         }
       });
@@ -331,6 +331,20 @@ function processGames(){
         teamData[g.l1.team].alive=false;
         if(g.rd>teamData[g.l1.team].maxRound)teamData[g.l1.team].maxRound=g.rd;
       }
+    }
+  });
+  // Directly apply KNOWN_RESULTS eliminations — catches cases where ESPN's
+  // name for a team doesn't match (e.g. Hawaii) so the seeded game merge misses it
+  KNOWN_RESULTS.forEach(r=>{
+    const li=findTeam(r.l);
+    if(li&&teamData[li.team]){
+      teamData[li.team].alive=false;
+      if(r.rd>teamData[li.team].maxRound)teamData[li.team].maxRound=r.rd;
+    }
+    const wi=findTeam(r.w);
+    if(wi&&teamData[wi.team]){
+      if(!teamData[wi.team].wins.includes(r.rd)){teamData[wi.team].wins.push(r.rd);teamData[wi.team].pts+=(RP[r.rd]||0);}
+      if(r.rd>teamData[wi.team].maxRound)teamData[wi.team].maxRound=r.rd;
     }
   });
   // Active round = lowest round with any live or scheduled game (i.e. in progress today)
