@@ -138,10 +138,12 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   <button class="tab active" data-tab="scores">Scores</button>
   <button class="tab" data-tab="games">Games</button>
   <button class="tab" data-tab="history">History</button>
+  <button class="tab" data-tab="rules">Rules</button>
 </div>
 <div id="tab-scores"></div>
 <div id="tab-games" class="hidden"></div>
 <div id="tab-history" class="hidden"></div>
+<div id="tab-rules" class="hidden"></div>
 <div class="footer">Est. 2013 · Brad · John · Ross · Ryan</div>
 <script>
 const PL=["Ryan","Brad","John","Ross"];
@@ -336,9 +338,11 @@ async function fetchAll(){
         .then(r=>r.ok?r.json():null).catch(()=>null)
     );
     const results=await Promise.all(fetches);
+    const seenIds=new Set();
     results.forEach(data=>{
       if(!data?.events)return;
       data.events.forEach(ev=>{
+        if(seenIds.has(ev.id))return;seenIds.add(ev.id);
         const comp=ev.competitions?.[0];if(!comp)return;
         const note=comp.notes?.[0]?.headline||ev.notes?.[0]?.headline||"";
         const rd=roundFromNote(note);
@@ -545,10 +549,47 @@ function renderHistory(){
   h+='</tbody></table></div></div>';
   document.getElementById("tab-history").innerHTML=h;
 }
-function renderAll(){renderScores();renderGames();renderHistory()}
+function renderRules(){
+  const scoring=[{rd:"Round of 64",pts:1},{rd:"Round of 32",pts:2},{rd:"Sweet 16",pts:3},{rd:"Elite 8",pts:4},{rd:"Final Four",pts:5},{rd:"Championship",pts:6}];
+  let h='';
+
+  // Scoring
+  h+=`<div class="sec"><div class="sec-label">Scoring</div><div class="gs">`;
+  scoring.forEach((r,i)=>{
+    const frac=r.pts/6;
+    const col=`hsl(${220-i*30},80%,${55+i*4}%)`;
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;${i>0?'border-top:1px solid var(--bd)':''}">
+      <span style="font-size:13px;font-weight:600;color:var(--t2)">${r.rd}</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:${col}">${r.pts} pt${r.pts>1?'s':''}</span>
+    </div>`;
+  });
+  h+=`</div></div>`;
+
+  // How it works
+  h+=`<div class="sec"><div class="sec-label">How It Works</div><div class="gc" style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+    <div style="font-size:13px;color:var(--t2);line-height:1.6">Each player drafts <strong style="color:#fff">16 teams</strong> from the full 64-team field before the tournament begins.</div>
+    <div style="font-size:13px;color:var(--t2);line-height:1.6">Every time one of your teams wins a game, you earn points based on the round — later rounds are worth more.</div>
+    <div style="font-size:13px;color:var(--t2);line-height:1.6">If your team gets eliminated, they stop earning points. The player with the <strong style="color:#fff">most total points</strong> when the tournament ends wins.</div>
+    <div style="font-size:13px;color:var(--t2);line-height:1.6">A championship run by a single team is worth <strong style="color:#fff">21 points</strong> (1+2+3+4+5+6).</div>
+  </div></div>`;
+
+  // Player colors
+  h+=`<div class="sec"><div class="sec-label">Players</div><div class="gc">`;
+  PL.forEach((p,i)=>{
+    const c=PC[p];
+    h+=`<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;${i>0?'border-top:1px solid var(--bd)':''}">
+      <div style="width:10px;height:10px;border-radius:50%;background:${c};flex-shrink:0;box-shadow:0 0 8px ${c}60"></div>
+      <span style="font-size:14px;font-weight:700;color:${c}">${p}</span>
+    </div>`;
+  });
+  h+=`</div></div>`;
+
+  document.getElementById("tab-rules").innerHTML=h;
+}
+function renderAll(){renderScores();renderGames();renderHistory();renderRules()}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));
-  ["scores","games","history"].forEach(id=>document.getElementById("tab-"+id).classList.toggle("hidden",id!==b.dataset.tab));
+  ["scores","games","history","rules"].forEach(id=>document.getElementById("tab-"+id).classList.toggle("hidden",id!==b.dataset.tab));
 }));
 initTeamData();
 const cached=loadCache();
