@@ -331,7 +331,12 @@ function processGames(){
       }
     }
   });
-  curRound=RLF[maxRd]||"Round of 64";
+  // Active round = lowest round with any live or scheduled game (i.e. in progress today)
+  // Falls back to highest completed round if everything is final
+  let activeRd=0;
+  games.forEach(g=>{if(g.rd>0&&(g.status==='live'||g.status==='sched')){if(!activeRd||g.rd<activeRd)activeRd=g.rd;}});
+  if(!activeRd)activeRd=maxRd;
+  curRound=RLF[activeRd]||"Round of 64";
   document.getElementById("rl").textContent=curRound+(hasLive?" · Live":"");
 }
 function calcScores(){
@@ -498,55 +503,78 @@ function renderScores(){
   document.getElementById("rbtn")?.addEventListener("click",()=>fetchAll());
 }
 function renderGames(){
-  const byRound={};
-  games.forEach(g=>{if(!byRound[g.rd])byRound[g.rd]=[];byRound[g.rd].push(g)});
+  if(!games.length){document.getElementById("tab-games").innerHTML='<div class="sec"><div class="status-line">No games loaded yet. Hit Refresh on the Scores tab.</div></div>';return;}
+
+  // Active round = lowest round with live or sched games
+  let activeRd=0;
+  games.forEach(g=>{if(g.rd>0&&(g.status==='live'||g.status==='sched')){if(!activeRd||g.rd<activeRd)activeRd=g.rd;}});
+  if(!activeRd)activeRd=games.filter(g=>g.rd>0&&g.status==='final').reduce((m,g)=>g.rd>m?g.rd:m,1);
+
+  // Parse tip-off time string → minutes for sorting ("7:10 PM ET" → 1150)
+  function tipoffMins(clock){
+    const m=clock&&clock.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if(!m)return 0;
+    let h=parseInt(m[1]),mn=parseInt(m[2]),ap=m[3].toUpperCase();
+    if(ap==='PM'&&h!==12)h+=12;if(ap==='AM'&&h===12)h=0;
+    return h*60+mn;
+  }
+
+  // Shared game row renderer
+  function gameRow(g){
+    const isLive=g.status==='live',isFinal=g.status==='final';
+    function teamRow(t){
+      const bold=isFinal&&t.winner,dim=isFinal&&!t.winner;
+      const oc=t.owner?PC[t.owner]:null;
+      return `<div class="gm-row${dim?' loser':''}">
+        ${t.logo?`<img class="gm-logo" src="${t.logo}" alt="">`:''}<div class="gm-name"${bold?' style="font-weight:800"':''}>${t.name}</div>
+        ${oc?`<span class="gm-owner" style="background:${oc}18;color:${oc}">${t.owner}</span>`:''}
+        <div class="gm-sc"${bold?' style="color:#fff"':''}>${(isFinal||isLive)?t.score:''}</div></div>`;
+    }
+    return `<div class="gm"><div class="gm-teams">${teamRow(g.t0)}${teamRow(g.t1)}</div>
+      <div class="gm-status">${isLive?`<div class="gm-live">● LIVE</div><div class="gm-live" style="font-size:9px;color:var(--t2)">${g.clock}</div>`:
+        isFinal?`<div class="gm-final">Final</div>`:`<div class="gm-time">${g.clock||'TBD'}</div>`}</div></div>`;
+  }
+
   let h='';
 
-  // ── Live games pinned to top ──
-  const liveAll=games.filter(g=>g.status==='live');
-  if(liveAll.length){
-    h+=`<div class="sec"><div class="sec-label" style="color:var(--live)">● Live Now</div><div class="gc">`;
-    liveAll.forEach(g=>{
-      const ownerColor0=g.t0.owner?PC[g.t0.owner]:null;
-      const ownerColor1=g.t1.owner?PC[g.t1.owner]:null;
-      h+=`<div class="gm">
-        <div class="gm-teams">
-          <div class="gm-row">${g.t0.logo?`<img class="gm-logo" src="${g.t0.logo}" alt="">`:''}<div class="gm-name" style="font-weight:800">${g.t0.name}</div>${g.t0.owner?`<span class="gm-owner" style="background:${ownerColor0}18;color:${ownerColor0}">${g.t0.owner}</span>`:''}<div class="gm-sc" style="color:#fff;font-weight:800">${g.t0.score}</div></div>
-          <div class="gm-row">${g.t1.logo?`<img class="gm-logo" src="${g.t1.logo}" alt="">`:''}<div class="gm-name" style="font-weight:800">${g.t1.name}</div>${g.t1.owner?`<span class="gm-owner" style="background:${ownerColor1}18;color:${ownerColor1}">${g.t1.owner}</span>`:''}<div class="gm-sc" style="color:#fff;font-weight:800">${g.t1.score}</div></div>
-        </div>
-        <div class="gm-status"><div class="gm-live">● LIVE</div><div class="gm-live" style="font-size:9px;color:var(--t2)">${g.clock}</div></div>
-      </div>`;
+  // ── 1. Current round: live first, then scheduled by tip-off ──
+  const currentGames=games.filter(g=>g.rd===activeRd&&(g.status==='live'||g.status==='sched'));
+  if(currentGames.length){
+    currentGames.sort((a,b)=>{
+      if(a.status!==b.status)return a.status==='live'?-1:1;
+      return tipoffMins(a.clock)-tipoffMins(b.clock);
     });
+    const rdLabel=activeRd===0?'First Four (Play-In · No Points)':`${RLF[activeRd]} · ${RP[activeRd]}pt per win`;
+    const hasAnyLive=currentGames.some(g=>g.status==='live');
+    h+=`<div class="sec"><div class="sec-label"${hasAnyLive?' style="color:var(--live)"':''}>${hasAnyLive?'● ':''} ${rdLabel}</div><div class="gc">`;
+    currentGames.forEach(g=>h+=gameRow(g));
     h+='</div></div>';
   }
 
-  const rounds=Object.keys(byRound).sort((a,b)=>+a-+b);
-  rounds.forEach(rd=>{
-    const rg=byRound[rd].sort((a,b)=>{
-      const order={live:0,sched:1,final:2};return(order[a.status]||9)-(order[b.status]||9);
+  // ── 2. Concluded games, most recent round first ──
+  const finalGames=games.filter(g=>g.rd>0&&g.status==='final');
+  if(finalGames.length){
+    const byRd={};
+    finalGames.forEach(g=>{if(!byRd[g.rd])byRd[g.rd]=[];byRd[g.rd].push(g)});
+    Object.keys(byRd).map(Number).sort((a,b)=>b-a).forEach(rd=>{
+      h+=`<div class="sec"><div class="sec-label" style="color:var(--t3)">${RLF[rd]||'Round '+rd} · Final</div><div class="gc">`;
+      byRd[rd].forEach(g=>h+=gameRow(g));
+      h+='</div></div>';
     });
-    const rdLabel=+rd===0?'First Four (Play-In · No Points)':`${RLF[rd]||'Round '+rd} · ${RP[rd]}pt per win`;
-    h+=`<div class="sec"><div class="sec-label">${rdLabel}</div><div class="gc">`;
-    rg.forEach(g=>{
-      const isLive=g.status==='live';
-      const isFinal=g.status==='final';
-      function teamRow(t){
-        const bold=isFinal&&t.winner;
-        const dim=isFinal&&!t.winner;
-        const ownerColor=t.owner?PC[t.owner]:null;
-        return `<div class="gm-row${dim?' loser':''}">
-          ${t.logo?`<img class="gm-logo" src="${t.logo}" alt="">`:''}<div class="gm-name"${bold?' style="font-weight:800"':''}>${t.name}</div>
-          ${t.owner?`<span class="gm-owner" style="background:${ownerColor}18;color:${ownerColor}">${t.owner}</span>`:''}
-          <div class="gm-sc"${bold?' style="color:#fff"':''}>${(isFinal||isLive)?t.score:''}</div></div>`;
-      }
-      h+=`<div class="gm">
-        <div class="gm-teams">${teamRow(g.t0)}${teamRow(g.t1)}</div>
-        <div class="gm-status">${isLive?`<div class="gm-live">● LIVE</div><div class="gm-live" style="font-size:9px;color:var(--t2)">${g.clock}</div>`:
-          isFinal?`<div class="gm-final">Final</div>`:`<div class="gm-time">${g.clock||'TBD'}</div>`}</div></div>`;
+  }
+
+  // ── 3. Future rounds (scheduled games beyond active round) ──
+  const futureGames=games.filter(g=>g.rd>activeRd&&g.status==='sched');
+  if(futureGames.length){
+    const byRd={};
+    futureGames.forEach(g=>{if(!byRd[g.rd])byRd[g.rd]=[];byRd[g.rd].push(g)});
+    Object.keys(byRd).map(Number).sort((a,b)=>a-b).forEach(rd=>{
+      h+=`<div class="sec"><div class="sec-label" style="color:var(--t3)">${RLF[rd]} · Upcoming</div><div class="gc">`;
+      byRd[rd].sort((a,b)=>tipoffMins(a.clock)-tipoffMins(b.clock)).forEach(g=>h+=gameRow(g));
+      h+='</div></div>';
     });
-    h+='</div></div>';
-  });
-  if(!games.length)h='<div class="sec"><div class="status-line">No games loaded yet. Hit Refresh on the Scores tab.</div></div>';
+  }
+
   document.getElementById("tab-games").innerHTML=h;
 }
 function renderHistory(){
