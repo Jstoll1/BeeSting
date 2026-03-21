@@ -656,24 +656,88 @@ function renderRules(){
 }
 function renderBracket(){
   const el=document.getElementById('tab-bracket');
-  // Sort each round by ESPN game ID (approx. bracket order)
-  const byRd={};
-  games.filter(g=>g.rd>0).forEach(g=>{if(!byRd[g.rd])byRd[g.rd]=[];byRd[g.rd].push(g)});
-  Object.values(byRd).forEach(arr=>arr.sort((a,b)=>String(a.id)<String(b.id)?-1:1));
 
   // Layout constants
   const SH=26,MW=108,CW=18,RW=MW+CW,YO=22;
-  // matchTopY: vertical position for match i in round rd (0-indexed)
   const mTop=(rd,i)=>(Math.pow(2,rd-1)-1)*SH+i*Math.pow(2,rd)*SH+YO;
   const mCen=(rd,i)=>mTop(rd,i)+SH;
-  // Column X positions
-  const lx=rd=>(rd-1)*RW;            // left side: R1=0,R2=126,S16=252,E8=378,F4=504
-  const champX=5*RW;                  // 630
-  const rx=rd=>(10-rd+1)*RW;         // right side: R1=1260,R2=1134,S16=1008,E8=882,F4=756
-  const W=1260+MW,H=32*SH+YO+14;    // 1368 × 870
+  const lx=rd=>(rd-1)*RW;
+  const champX=5*RW;
+  const rx=rd=>(10-rd+1)*RW;
+  const W=1260+MW,H=32*SH+YO+14;
 
-  // Truncate name to fit slot
   const nm=n=>n&&n.length>13?n.slice(0,12)+'…':n||'TBD';
+
+  // HARDCODED 2026 BRACKET ORDER — from official NCAA PDF
+  // Left side: EAST (positions 0-7) + SOUTH (positions 8-15), top-to-bottom
+  const LBR=[
+    ['Duke','Siena'],['Ohio State','TCU'],["St. John's",'Northern Iowa'],['Kansas','Cal Baptist'],
+    ['Louisville','South Florida'],['Michigan State','North Dakota State'],['UCLA','UCF'],['UConn','Furman'],
+    ['Florida','Prairie View'],['Clemson','Iowa'],['Vanderbilt','McNeese'],['Nebraska','Troy'],
+    ['UNC','VCU'],['Illinois','Penn'],["St. Mary's",'Texas A&M'],['Houston','Idaho'],
+  ];
+  // Right side: WEST (positions 0-7) + MIDWEST (positions 8-15), top-to-bottom
+  const RBR=[
+    ['Arizona','Long Island'],['Villanova','Utah State'],['Wisconsin','High Point'],['Arkansas','Hawaii'],
+    ['BYU','Texas'],['Gonzaga','Kennesaw State'],['Miami','Missouri'],['Purdue','Queens'],
+    ['Michigan','Howard'],['Georgia','St. Louis'],['Texas Tech','Akron'],['Alabama','Hofstra'],
+    ['Tennessee','Miami OH'],['Virginia','Wright State'],['Kentucky','Santa Clara'],['Iowa State','Tennessee State'],
+  ];
+
+  // Find game in games[] for two pool-canonical team names
+  function findG(a,b){
+    const norm=n=>n?(findTeam(n)?.team||n):null;
+    const pA=norm(a),pB=norm(b);
+    if(!pA&&!pB)return null;
+    for(const g of games){
+      const g0=g.t0.info?.team,g1=g.t1.info?.team;
+      if(pA&&pB){if((g0===pA&&g1===pB)||(g0===pB&&g1===pA))return g;}
+      else if(pA){if(g0===pA||g1===pA)return g;}
+      else if(pB){if(g0===pB||g1===pB)return g;}
+    }
+    return null;
+  }
+  // Get pool name of winner from a bracket slot
+  function winnerOf(slot){
+    if(!slot?.game)return null;
+    const g=slot.game;if(g.status!=='final')return null;
+    if(g.t0.winner)return g.t0.info?.team||g.t0.name;
+    if(g.t1.winner)return g.t1.info?.team||g.t1.name;
+    return null;
+  }
+  // Build bracket tree: tree[rd] = array of {t0,t1,game} slots
+  function buildTree(r1pairs){
+    const T={};
+    T[1]=r1pairs.map(([t0,t1])=>({t0,t1,game:findG(t0,t1)}));
+    for(let rd=2;rd<=4;rd++){
+      const prev=T[rd-1];T[rd]=[];
+      for(let i=0;i<prev.length;i+=2){
+        const w0=winnerOf(prev[i]),w1=winnerOf(prev[i+1]);
+        T[rd].push({t0:w0,t1:w1,game:findG(w0,w1)});
+      }
+    }
+    return T;
+  }
+  // Convert bracket slot → game-like object for rendering
+  function toGame(slot){
+    if(!slot)return null;
+    if(slot.game)return slot.game;
+    const mkT=n=>{
+      if(!n)return{name:'TBD',score:'',winner:false,info:null,owner:null,logo:''};
+      const info=findTeam(n);
+      return{name:n,score:'',winner:false,info,owner:info?.player||null,logo:teamLogos[n]||''};
+    };
+    return{id:'br',rd:0,status:'sched',clock:'',t0:mkT(slot.t0),t1:mkT(slot.t1),w1:null,l1:null};
+  }
+
+  const LT=buildTree(LBR),RT=buildTree(RBR);
+  // F4 and championship slots
+  const lF4w0=winnerOf(LT[4][0]),lF4w1=winnerOf(LT[4][1]);
+  const rF4w0=winnerOf(RT[4][0]),rF4w1=winnerOf(RT[4][1]);
+  const lF4={t0:lF4w0,t1:lF4w1,game:findG(lF4w0,lF4w1)};
+  const rF4={t0:rF4w0,t1:rF4w1,game:findG(rF4w0,rF4w1)};
+  const cW0=winnerOf(lF4),cW1=winnerOf(rF4);
+  const champ={t0:cW0,t1:cW1,game:findG(cW0,cW1)};
 
   // Single team row SVG
   function slotSVG(x,y,g,side){
@@ -718,19 +782,20 @@ function renderBracket(){
   [['R64',lx(1)],['R32',lx(2)],['S16',lx(3)],['E8',lx(4)],['F4',lx(5)],['★',champX],['F4',rx(5)],['E8',rx(4)],['S16',rx(3)],['R32',rx(2)],['R64',rx(1)]].forEach(([lbl,x])=>{
     tm+=`<text x="${x+MW/2}" y="${YO-6}" fill="${lbl==='★'?'#e63946':'#252535'}" font-size="9" text-anchor="middle" font-family="DM Sans,sans-serif" font-weight="700" letter-spacing="1.5">${lbl}</text>`;
   });
+  // Faint region labels
+  const rLY=(a,b)=>(mTop(1,a)+mTop(1,b)+SH*2)/2+SH/2;
+  [['EAST',lx(3)+MW/2,rLY(0,7)],['SOUTH',lx(3)+MW/2,rLY(8,15)],
+   ['WEST',rx(3)+MW/2,rLY(0,7)],['MIDWEST',rx(3)+MW/2,rLY(8,15)]].forEach(([lbl,x,y])=>{
+    tm+=`<text x="${x}" y="${y}" fill="#191926" font-size="18" text-anchor="middle" font-family="DM Sans,sans-serif" font-weight="800" letter-spacing="3">${lbl}</text>`;
+  });
 
-  // Left side: R1 → E8, with connectors to next round
+  // Left side R1–E8
   [1,2,3,4].forEach(rd=>{
-    const all=byRd[rd]||[];
-    const half=Math.ceil(all.length/2);
-    const leftG=all.slice(0,half);
-    const count=16>>>(rd-1); // 16,8,4,2
-    const x=lx(rd);
-    for(let i=0;i<count;i++){
-      tm+=matchSVG(x,mTop(rd,i),leftG[i]||null);
+    const slots=LT[rd],x=lx(rd);
+    for(let i=0;i<slots.length;i++){
+      tm+=matchSVG(x,mTop(rd,i),toGame(slots[i]));
       if(rd<5&&i%2===0){
-        const ni=Math.floor(i/2);
-        const ncy=mCen(rd+1,ni),nx=lx(rd+1);
+        const ni=Math.floor(i/2),ncy=mCen(rd+1,ni),nx=lx(rd+1);
         ln+=connL(x,mCen(rd,i),nx,ncy);
         ln+=connL(x,mCen(rd,i+1),nx,ncy);
       }
@@ -738,33 +803,27 @@ function renderBracket(){
   });
 
   // F4 left + connector to champ
-  {const f4=byRd[5]||[];tm+=matchSVG(lx(5),mTop(5,0),f4[0]||null);
+  {const g=toGame(lF4);tm+=matchSVG(lx(5),mTop(5,0),g);
   ln+=`<path d="M${lx(5)+MW},${mCen(5,0)} H${champX}" stroke="#1a1a28" stroke-width="1" fill="none"/>`;}
 
   // Championship
-  {const cg=byRd[6]||[];tm+=matchSVG(champX,mTop(5,0),cg[0]||null);}
+  {tm+=matchSVG(champX,mTop(5,0),toGame(champ));}
 
   // F4 right + connector to champ
-  {const f4=byRd[5]||[];tm+=matchSVG(rx(5),mTop(5,0),f4[1]||null);
+  {const g=toGame(rF4);tm+=matchSVG(rx(5),mTop(5,0),g);
   ln+=`<path d="M${rx(5)},${mCen(5,0)} H${champX+MW}" stroke="#1a1a28" stroke-width="1" fill="none"/>`;}
 
-  // Right side: E8 → R1, with connectors
+  // Right side E8–R1
   [4,3,2,1].forEach(rd=>{
-    const all=byRd[rd]||[];
-    const half=Math.ceil(all.length/2);
-    const rightG=all.slice(half);
-    const count=16>>>(rd-1);
-    const x=rx(rd);
-    for(let i=0;i<count;i++){
-      tm+=matchSVG(x,mTop(rd,i),rightG[i]||null);
+    const slots=RT[rd],x=rx(rd);
+    for(let i=0;i<slots.length;i++){
+      tm+=matchSVG(x,mTop(rd,i),toGame(slots[i]));
       if(rd<5&&i%2===0){
-        const ni=Math.floor(i/2);
-        const ncy=mCen(rd+1,ni),nx=rx(rd+1);
+        const ni=Math.floor(i/2),ncy=mCen(rd+1,ni),nx=rx(rd+1);
         ln+=connR(x,mCen(rd,i),nx,ncy);
         ln+=connR(x,mCen(rd,i+1),nx,ncy);
       }
     }
-    // E8 → F4 right
     if(rd===4){
       ln+=connR(x,mCen(4,0),rx(5),mCen(5,0));
       ln+=connR(x,mCen(4,1),rx(5),mCen(5,0));
