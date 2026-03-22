@@ -321,6 +321,7 @@ let teamData={};
 let teamLogos={};
 let hasLive=false;
 let curRound="Round of 64";
+let activeRd=1;
 let openP=new Set(PL);
 function initTeamData(){
   teamData={};
@@ -375,7 +376,7 @@ function processGames(){
   });
   // Active round = lowest round with any live or scheduled game (i.e. in progress today)
   // Falls back to highest completed round if everything is final
-  let activeRd=0;
+  activeRd=0;
   games.forEach(g=>{if(g.rd>0&&(g.status==='live'||g.status==='sched')){if(!activeRd||g.rd<activeRd)activeRd=g.rd;}});
   if(!activeRd)activeRd=maxRd;
   curRound=RLF[activeRd]||"Round of 64";
@@ -475,8 +476,17 @@ function renderScores(){
   const mx=calcMaxScores();
   const sorted=[...PL].sort((a,b)=>sc[b]-sc[a]);
 
+  // ── Round + points banner ──
+  const pts=RP[activeRd];
+  const rdPtsLabel=activeRd===0?'First Four · No Points':`${curRound} · ${pts} pt${pts!==1?'s':''} per win`;
+  let h=`<div style="display:flex;align-items:center;justify-content:center;padding:0 16px 14px">
+    <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(230,57,70,0.08);border:1px solid rgba(230,57,70,0.2);border-radius:100px;padding:7px 16px">
+      <span style="font-size:10px;font-weight:800;color:#e63946;letter-spacing:2px;text-transform:uppercase">${rdPtsLabel}</span>
+    </div>
+  </div>`;
+
   // ── Standings strip ──
-  let h='<div class="sec"><div class="sec-label">Standings</div><div class="sb">';
+  h+='<div class="sec"><div class="sec-label">Standings</div><div class="sb">';
   sorted.forEach((p,i)=>{
     const c=PC[p];
     const al=DR[p].filter(t=>teamData[t]?.alive!==false).length;
