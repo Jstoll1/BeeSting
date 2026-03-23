@@ -322,6 +322,7 @@ let teamLogos={};
 let hasLive=false;
 let curRound="Round of 64";
 let activeRd=1;
+let bracketView='simple';
 let openP=new Set(PL);
 function initTeamData(){
   teamData={};
@@ -797,6 +798,90 @@ function renderBracket(){
   const cW0=winnerOf(lF4),cW1=winnerOf(rF4);
   const champ={t0:cW0,t1:cW1,game:findG(cW0,cW1)};
 
+  // ── Toggle button helper ──
+  const togBtn=(v,lbl)=>`<button onclick="bracketView='${v}';renderBracket()" style="flex:1;padding:9px 0;border-radius:9px;border:1px solid ${bracketView===v?'rgba(255,255,255,.15)':'var(--bd)'};background:${bracketView===v?'rgba(255,255,255,.08)':'transparent'};color:${bracketView===v?'#fff':'var(--t3)'};font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s">${lbl}</button>`;
+  const togRow=`<div style="display:flex;gap:4px;padding:8px 16px 12px">${togBtn('simple','Regional')}${togBtn('full','Full Bracket')}</div>`;
+
+  // ── Simple / Regional bracket view ──
+  if(bracketView==='simple'){
+    const rd=Math.max(1,Math.min(activeRd,4));
+    const hf=Math.pow(2,4-rd); // games per region in this round
+    const nxtLabels={1:'R32',2:'S16',3:'E8',4:'F4'};
+    const REGS=[
+      {n:'EAST',   c:'#60b4ff',slots:LT[rd].slice(0,hf),    nxt:rd<4?LT[rd+1].slice(0,hf/2):null},
+      {n:'SOUTH',  c:'#5aedb5',slots:LT[rd].slice(hf,hf*2), nxt:rd<4?LT[rd+1].slice(hf/2,hf):null},
+      {n:'WEST',   c:'#ff7070',slots:RT[rd].slice(0,hf),    nxt:rd<4?RT[rd+1].slice(0,hf/2):null},
+      {n:'MIDWEST',c:'#ffd056',slots:RT[rd].slice(hf,hf*2), nxt:rd<4?RT[rd+1].slice(hf/2,hf):null},
+    ];
+    const mkRow=(t,win,los)=>{
+      const oc=t.owner?PC[t.owner]:null;
+      return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px 5px ${oc?'11px':'8px'};position:relative;min-height:28px">
+        ${oc?`<span style="position:absolute;left:0;top:3px;bottom:3px;width:3px;background:${oc};border-radius:2px"></span>`:''}
+        ${t.logo?`<img style="width:18px;height:18px;border-radius:3px;object-fit:contain;flex-shrink:0" src="${t.logo}" alt="">`:
+          `<span style="width:18px;height:18px;border-radius:3px;background:rgba(255,255,255,.04);flex-shrink:0"></span>`}
+        <span style="flex:1;font-size:12px;font-weight:${win?700:400};color:${los?'#2a2a3a':win?'#fff':'#8888a8'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap${los?';text-decoration:line-through':''}">${t.name||'TBD'}</span>
+        ${win||los?`<span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;color:${win?'#fff':'#2a2a3a'};flex-shrink:0">${t.score||''}</span>`:''}
+      </div>`;
+    };
+    const mkCard=(slot)=>{
+      if(!slot)return`<div style="background:rgba(255,255,255,.02);border:1px dashed var(--bd);border-radius:8px;height:56px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--t4)">TBD</div>`;
+      const g=toGame(slot);
+      if(!g)return`<div style="background:rgba(255,255,255,.02);border:1px dashed var(--bd);border-radius:8px;height:56px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--t4)">TBD</div>`;
+      const fin=g.status==='final',live=g.status==='live';
+      return `<div style="background:var(--gl);border:1px solid ${live?'rgba(34,197,94,.3)':'var(--bd)'};border-radius:8px;overflow:hidden;${live?'box-shadow:0 0 8px rgba(34,197,94,.1)':''}">
+        ${mkRow(g.t0,fin&&g.t0.winner,fin&&!g.t0.winner)}
+        <div style="height:1px;background:rgba(255,255,255,.04);margin:0 8px"></div>
+        ${mkRow(g.t1,fin&&g.t1.winner,fin&&!g.t1.winner)}
+        <div style="padding:2px 8px 4px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:9px;font-weight:700;color:${live?'var(--live)':'var(--t4)'};letter-spacing:.5px">${live?(g.clock||'LIVE'):fin?'FINAL':''}</span>
+        </div>
+      </div>`;
+    };
+    const mkAdvSlot=(slot,lbl)=>{
+      const w=slot?winnerOf(slot):null;
+      const info=w?findTeam(w):null;
+      const oc=info?.player?PC[info.player]:null;
+      return `<div style="background:${oc?oc+'15':'rgba(255,255,255,.025)'};border:1px solid ${oc?oc+'35':'var(--bd)'};border-radius:8px;padding:8px 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:100%;min-height:52px;position:relative;overflow:hidden">
+        ${oc?`<div style="position:absolute;top:0;left:0;right:0;height:2px;background:${oc}"></div>`:''}
+        <span style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:var(--t3)">${lbl}</span>
+        <span style="font-size:11px;font-weight:700;color:${w?'#fff':'var(--t4)'};text-align:center;line-height:1.2">${w||'TBD'}</span>
+      </div>`;
+    };
+    let sv='';
+    REGS.forEach(({n,c,slots,nxt})=>{
+      sv+=`<div class="sec"><div class="sec-label" style="color:${c};letter-spacing:3px">${n}</div>`;
+      if(slots.length===1){
+        // E8: single game → F4
+        sv+=`<div style="display:flex;align-items:stretch;gap:0;padding:0 2px 4px">
+          <div style="flex:1">${mkCard(slots[0])}</div>
+          <div style="width:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center">
+            <div style="width:100%;height:1px;background:#252535"></div>
+          </div>
+          <div style="width:68px;flex-shrink:0">${mkAdvSlot(null,'→ F4')}</div>
+        </div>`;
+      } else {
+        for(let i=0;i<slots.length;i+=2){
+          const nxtSlot=nxt?nxt[i/2]:null;
+          const nxtLbl=nxtLabels[rd]||'';
+          sv+=`<div style="display:flex;align-items:stretch;gap:0;margin-bottom:8px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+              ${mkCard(slots[i])}
+              ${mkCard(slots[i+1])}
+            </div>
+            <div style="width:14px;flex-shrink:0;position:relative;margin:12px 0">
+              <div style="position:absolute;top:0;left:0;right:0;height:50%;border-top:1px solid #252535;border-right:1px solid #252535;border-radius:0 4px 0 0"></div>
+              <div style="position:absolute;bottom:0;left:0;right:0;height:50%;border-bottom:1px solid #252535;border-right:1px solid #252535;border-radius:0 0 4px 0"></div>
+            </div>
+            <div style="width:68px;flex-shrink:0;display:flex;align-items:center">${mkAdvSlot(nxtSlot,nxtLbl)}</div>
+          </div>`;
+        }
+      }
+      sv+='</div>';
+    });
+    el.innerHTML=togRow+sv;
+    return;
+  }
+
   // Single team row SVG
   function slotSVG(x,y,g,side){
     if(!g)return `<rect x="${x}" y="${y}" width="${MW}" height="${SH}" fill="rgba(255,255,255,.025)" rx="0"/>
@@ -895,8 +980,8 @@ function renderBracket(){
     <span style="font-size:11px;font-weight:700;color:${PC[p]}">${p}</span>
   </span>`).join('');
 
-  el.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;padding:8px 16px 4px;gap:2px">${keyHtml}</div>
+  el.innerHTML=togRow+`
+    <div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;padding:4px 16px 4px;gap:2px">${keyHtml}</div>
     <div id="brk-wrap" style="overflow:hidden;width:100%;height:calc(100dvh - 200px);position:relative;touch-action:none;cursor:grab;background:#08080e">
       <div id="brk-inner" style="position:absolute;will-change:transform;transform-origin:0 0">${svg}</div>
       <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:9px;color:#1e1e2e;font-weight:700;letter-spacing:1.5px;pointer-events:none;white-space:nowrap">PINCH TO ZOOM · DRAG TO PAN</div>
